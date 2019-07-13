@@ -15,77 +15,97 @@ var connection = mysql.createConnection({
     database: "bamazon"
 });
 
-connection.connect(function(err) {
-    if (err) throw err;
-    console.log("connected as id " + connection.threadId);
-  });
+// promptUserPurchase will prompt the user for the item/quantity they would like to purchase
+function promptUserPurchase() {
 
-function readData() {
-    console.log("Reading all items for sale...");
-    connection.query("SELECT * FROM products", function (err, res) {
-        if (err) throw err;
-        // Log all results of the SELECT statement
-        console.log(res);
-        connection.end();
-    });
+	// Prompt the user to select an item
+	inquirer.prompt([
+		{
+			type: 'input',
+			name: 'item_id',
+			message: 'Please enter the Item ID which you would like to purchase.',
+		},
+		{
+			type: 'input',
+			name: 'quantity',
+			message: 'How many do you need?'
+		}
+	]).then(function(input) {
+		var item = input.item_id;
+		var quantity = input.quantity;
+		var queryStr = 'SELECT * FROM products WHERE ?';
+
+		connection.query(queryStr, {item_id: item}, function(err, data) {
+			if (err) throw err;
+
+			if (data.length === 0) {
+				console.log('ERROR: Invalid Item ID. Please select a valid Item ID.');
+				displayInventory();
+
+			} else {
+				var productData = data[0];
+
+				// If the quantity requested is available
+				if (quantity <= productData.stock_quantity) {
+					console.log('Placing order');
+
+					// Update the query string
+					var updateQueryStr = 'UPDATE products SET stock_quantity = ' + (productData.stock_quantity - quantity) + ' WHERE item_id = ' + item;
+					// Update the inventory
+					connection.query(updateQueryStr, function(err, data) {
+						if (err) throw err;
+
+						console.log('Your oder was successful! Your total is $' + productData.price * quantity);
+
+						// End the database connection
+						connection.end();
+					})
+				} else {
+					console.log('Sorry, there is not enough product in stock, please submit a new order');
+					displayInventory();
+				}
+			}
+		})
+	})
 };
 
-readData();
+// displayInventory will retrieve the current inventory from the database and output it to the console
+function displayInventory() {
+	// console.log('___ENTER displayInventory___');
 
-/* function createAuction() {
-    inquirer.prompt([
-        {
-            type: "input",
-            message: "What are you selling?",
-            name: "items"
-        },
-        {
-            type: "input",
-            message: "What is the opening bid price?",
-            name: "price"
-        },
-        {
-            type: "input",
-            message: "How long is your bid?",
-            name: "end_date"
-        }
-    ]).then(function (response) {
+	// Construct the db query string
+	queryStr = 'SELECT * FROM products';
 
-        var query = connection.query(
-            "INSERT INTO items SET ?",
-            {
-                items: response.items,
-                price: response.price,
-                end_date: response.end_date
-            },
-            function (err, res) {
-                readData();
-            }
-        );
-    });
+	// Make the db query
+	connection.query(queryStr, function(err, data) {
+		if (err) throw err;
+
+		console.log('Existing Inventory: ');
+		console.log('...................\n');
+
+		var printMe = '';
+		for (var i = 0; i < data.length; i++) {
+			printMe = '';
+			printMe += 'Item ID: ' + data[i].item_id + '  //  ';
+			printMe += 'Product Name: ' + data[i].product_name + '  //  ';
+			printMe += 'Department: ' + data[i].department_name + '  //  ';
+			printMe += 'Price: $' + data[i].price + '\n';
+
+			console.log(printMe);
+		}
+
+	  	console.log("--------------------------------------------------------\n");
+
+	  	//Prompt the user for purchase
+	  	promptUserPurchase();
+	})
 }
 
-inquirer
-    .prompt([
-        {
-            type: "list",
-            choices: ["Seller", "Bidder"],
-            message: "Are you a seller or bidder?",
-            name: "action"
-        }
-    ]).then(function (res) {
-        var action = res.action;
+// runBamazon will execute the main application logic
+function runBamazon() {
+	displayInventory();
+}
 
+// Run the application logic
 
-        if (action === "Bidder") {
-            // CREATE A NEW BID
-            console.log("I'm a bidder!");
-            readData();
-        }
-        if (action === "Seller") {
-            // DISPLAY BIDS
-            createAuction();
-        }
-    });
-
-*/
+runBamazon();
